@@ -3,6 +3,10 @@ Modify osu! beatmaps from the terminal with an interactive script.
 Requires root permissions for automatic map detection.
 
 # usage
+first, you will need to set your songs directory  
+- open the perl script, and change `$songdir` to your songs directory  
+
+then, you can use it as follows:
 - open osu
 - go to the map you want to modify (just leave it playing)
 - run the perl script as root
