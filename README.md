@@ -1,5 +1,5 @@
 # osu-trainer-cli
-Modify osu! beatmaps from the terminal.  
+Modify osu! beatmaps from the terminal with an interactive script.  
 Requires root permissions for automatic map detection.
 
 # usage
