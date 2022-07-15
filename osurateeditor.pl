@@ -4,9 +4,11 @@ use warnings;
 use Term::ANSIColor;
 use JSON;
 use utf8;
+use Try::Tiny;
 
-#put your songs dir here
+#put your songs dir here-------------------------------
 my $songdir = "/home/ceeb/games/osu-folder/Songs";
+#------------------------------------------------------
 
 print("----------", color("cyan"), "osu rate editor", color("reset"), "----------\n");
 
@@ -16,24 +18,43 @@ if($> != 0) {
     exit;
 }
 
+#start background memory server on a child process
 print("Starting osu memory reader...\n");
-system("./gosumemory -cgodisable &> /dev/null");
+my $pid = fork;
+if($pid == 0)
+{
+    system(`./gosumemory -cgodisable -path $songdir &> /dev/null`);
+    exit;
+}
+print("Done! Getting current map info.");
 
+#try to get the current map info from the now-launched memory server
+#print dots to show user it isn't hanging, repeat until error code is 0 (success)
+my $mapinfo = "";
+my $attempts = 0;
+do {
+    try {
+        $attempts++;
+        if($attempts % 40 == 0) {
+            print(".");
+        }
+        $mapinfo = `curl --silent http://localhost:24050/json`;
+    }
+} until($? == 0);
 
-#get current map info from the now started memory reader
-print("Done! Getting current map info...\n\n");
-my $mapinfo = decode_json(`curl --silent http://localhost:24050/json`);
+#decode the json we now have from curl, separate it into values
+$mapinfo = decode_json($mapinfo);
 my $title = $mapinfo->{"menu"}->{"bm"}->{"metadata"}->{"title"};
 my $diff = $mapinfo->{"menu"}->{"bm"}->{"metadata"}->{"difficulty"};
-#my @stats = `curl --silent http://localhost:24050/json | jq .menu.bm.metadata.difficulty`;
-chomp($title, $diff);
 
-# remove the quotes from the returned info
+
+# remove the quotes and newline chars from the returned info
 $title =~ tr/"//d;
 $diff =~ tr/"//d;
+chomp($title, $diff);
 
-#get desired change
-print("Now editing: ", color("cyan"), $title, color("reset"), " [", color("cyan"), $diff, color("reset"), "]\n");
+#get desired bpm change
+print("\nNow editing: ", color("cyan"), $title, color("reset"), " [", color("cyan"), $diff, color("reset"), "]\n");
 print("Desired BPM?\n>");
 my $bpm = <>;
 chomp($bpm);
@@ -44,4 +65,3 @@ chomp($bpm);
 ##call osu beatmod to perform the actual rate edit
 print("\nStarting map editor utility...\n");
 exec("./osu-beatmod -p \"$songdir\" -b \"$title\" -d \"$diff\" -bpm $bpm");
-
