@@ -12,6 +12,6 @@ then, you can use it as follows:
 - run the perl script as root
 - follow the prompts in the script
 
-# dependencies
-uses [gosumemory](https://github.com/l3lackShark/gosumemory) to read info from the game.  
-uses [osu-beatmod](https://github.com/MasterIO02/osu-beatmod) to search the songs directory and create the modified beatmap.
+# related projects
+[gosumemory](https://github.com/l3lackShark/gosumemory) to read info from the game.  
+[osu-beatmod](https://github.com/MasterIO02/osu-beatmod) to search the songs directory and create the modified beatmap.
