@@ -47,7 +47,6 @@ $mapinfo = decode_json($mapinfo);
 my $title = $mapinfo->{"menu"}->{"bm"}->{"path"}->{"folder"};
 my $diff  = $mapinfo->{"menu"}->{"bm"}->{"metadata"}->{"difficulty"};
 my $maxbpm = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"BPM"}->{"max"};
-my $minbpm = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"BPM"}->{"min"};
 my $ar = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"AR"};
 
 # haven't implemented od scaling or user defined changing of stats yet
@@ -85,10 +84,10 @@ $valid = 0;
 while($valid == 0) {
     my $choice = <>;
     chomp($choice);
+    
     if($choice eq "y") {
-        my $rate = $bpm/($maxbpm + $minbpm)/2; # keep in mind that the rate is based on the average change in bpm
-        $ar = ((2/9)*$rate*(13-$ar))+$ar; # magic scaling factor for approach rate
-        $ar = floor($ar*10)/10;
+        my $rate = $bpm/$maxbpm; # keep in mind that the rate is based on the change from the max bpm
+        $ar = floor((((2/9)*$rate*(13-$ar))+$ar)*10)/10; # magic scaling factor for approach rate
         print( "New AR is ", $ar, ". ");
         $valid = 1;
     }
