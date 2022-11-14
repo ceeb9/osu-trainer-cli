@@ -5,76 +5,100 @@ use Term::ANSIColor;
 use JSON;
 use utf8;
 use Try::Tiny;
+use POSIX qw/floor/;
 
-#put your songs dir here-------------------------------
-my $songdir = "/home/ceeb/games/osu-folder/Songs";
-#------------------------------------------------------
-
-print("----------", color("cyan"), "osu rate editor", color("reset"), "----------\n");
+#put your songs directory here-------------------------------
+my $songdir = "/home/ceeb/.local/share/osu-wine/osu!/Songs";
+#------------------------------------------------------------
 
 # check if root
-if($> != 0) {
+if ( $> != 0 ) {
     print(color("red"), "You are not running as root! Root permissions are required to read the current map info. Please try again. ", color("reset"));
     exit;
 }
 
+print("----------", color("cyan"), "osu rate editor", color("reset"), "----------\n");
+
 # start background memory server on a child process
 print("Starting osu memory reader...\n");
 my $pid = fork;
-if($pid == 0)
-{
-    system("./gosumemory -cgodisable -path $songdir > /dev/null 2>&1"); #throws away stdout and stderr of the bg memory server
+if ( $pid == 0 ) {
+    system("sudo ./gosumemory -path $songdir > /dev/null 2>&1");
     exit;
 }
-
 print("Done! Getting current map info.");
 
 # try to get the current map info from the now-launched memory server
-# print dots to show user it isn't hanging, repeat until error code is 0 (success)
-my $mapinfo = "";
+my $mapinfo  = "";
 my $attempts = 0;
 do {
     try {
         $attempts++;
-        if($attempts % 40 == 0) {
+        if ( $attempts % 75 == 0 ) {
             print(".");
         }
         $mapinfo = `curl --silent http://localhost:24050/json`;
     }
-} until($? == 0);
-
-# do it again so that we ensure we actually get a value after the server has started
-sleep(0.2);
-$mapinfo = `curl --silent http://localhost:24050/json`;
-
-# decode the json we now have from curl, separate it into values
+} until (length($mapinfo) > 0 && decode_json($mapinfo)->{"menu"}->{"bm"}->{"stats"}->{"BPM"}->{"max"} != 0); 
+                                #^^^^^^^^^^^ ensures that stats have been populated before starting to use values
 $mapinfo = decode_json($mapinfo);
 
-# use the folder as the title, as this is what the search function actually uses
-# it contains the map id, so there is no possible ambiguity
+# use the name of the folder instead of the title of the map, since it contains the map id
 my $title = $mapinfo->{"menu"}->{"bm"}->{"path"}->{"folder"};
-my $diff = $mapinfo->{"menu"}->{"bm"}->{"metadata"}->{"difficulty"};
+my $diff  = $mapinfo->{"menu"}->{"bm"}->{"metadata"}->{"difficulty"};
+my $maxbpm = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"BPM"}->{"max"};
+my $minbpm = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"BPM"}->{"min"};
+my $ar = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"AR"};
 
-# delete question mark characters 
-# search function doesn't like them
+# haven't implemented od scaling or user defined changing of stats yet
+#my $cs = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"CS"};
+#my $od = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"OD"};
+#my $hp = $mapinfo->{"menu"}->{"bm"}->{"stats"}->{"HP"};
+
+# sanitize title and diff names
 $title =~ tr/?//d;
-$diff =~ tr/?//d;
+$diff  =~ tr/?//d;
+chomp( $title, $diff );
 
-# remove newline chars
-chomp($title, $diff);
+# get the new bpm
+print("\nNow editing: ", color("cyan"), $title=~s/^[0-9]*[\s]//r, color("reset"), " [", color("cyan"), $diff, color("reset"), "]\n"); 
+                                                #^^^^^^^^^^^^^^^ this prints the title without the beatmap id but without changing the title variable
+print("Note that speed scaling is based on the maximum BPM of a song.\n
+       A 150-170BPM song will not change speed if you enter 170.
+     \nDesired BPM?\n> ");
+my $valid = 0;
+my $bpm = "";
+while($valid == 0) {
+    $bpm = <>;
+    chomp($bpm);
+    if($bpm !~ /^[0-9]+(?:\.*[0-9]+)*$/) { # regex to check for a valid positive real number
+        print("Please enter a valid BPM.\n> ")
+    } 
+    else {
+        $valid = 1;
+    }
+}
 
-# get desired bpm change
-print("\nNow editing: ", color("cyan"), $title, color("reset"), " [", color("cyan"), $diff, color("reset"), "]\n");
-print("Desired BPM?\n>");
-my $bpm = <>;
-chomp($bpm);
-
-# calculate the modified ar and od values
-# todo
+# scale or don't scale approach rate
+print("Scale approach rate? (y/n)\n> ");
+$valid = 0;
+while($valid == 0) {
+    my $choice = <>;
+    chomp($choice);
+    if($choice eq "y") {
+        my $rate = $bpm/($maxbpm + $minbpm)/2; # keep in mind that the rate is based on the average change in bpm
+        $ar = ((2/9)*$rate*(13-$ar))+$ar; # magic scaling factor for approach rate
+        $ar = floor($ar*10)/10;
+        print( "New AR is ", $ar, ". ");
+        $valid = 1;
+    }
+    elsif($choice eq "n"){$valid = 1;}
+    else {
+        print("Please enter a valid choice. (y/n)\n> ");
+    }
+}
 
 # call osu beatmod to perform the actual rate edit
 print("\nStarting map editor utility...\n");
-system("./osu-beatmod -p \"$songdir\" -b \"$title\" -d \"$diff\" -bpm $bpm");
-
-# kill the memory reader now that it is no longer needed
+system("./osu-beatmod -p \"$songdir\" -b \"$title\" -d \"$diff\" -bpm $bpm -ar $ar");
 system("sudo pkill gosumemory");
